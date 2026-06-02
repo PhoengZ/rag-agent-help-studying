@@ -34,3 +34,9 @@
 - **Attempted**: Updated `.gitignore` to prevent tracking of local document files.
 - **Hypothesis**: Adding `documents/` to `.gitignore` will ignore local files/folders under the documents directory.
 - **Observed Result/Outcome**: Appended `documents/` to `.gitignore`. Ran `git status` and verified that untracked directories like `documents/DSDE/` and `documents/IOT/` are now successfully ignored by Git.
+
+## [2026-06-02] - Typhoon OCR Integration
+- **Attempted**: Created a custom `TyphoonOCRReader` implementing LlamaIndex's `BaseReader` to render PDF pages into images in-memory (using `pymupdf`) and call `typhoon-ocr` via parallel threads. Integrated the reader into `sync_manager.py` for `.pdf` files.
+- **Hypothesis**: In-memory rendering combined with concurrent API calls will efficiently extract text from lecture slides and image-only PDFs, which can then be successfully embedded by `multilingual-e5-small`.
+- **Observed Result/Outcome**: Installed `pymupdf` dependency. Verified with a test script on `3_Grader Handbook.pdf` that page-by-page OCR works correctly. Executed incremental synchronization (`main.py sync`) which successfully updated the vector store index using the new OCR pipeline.
+
