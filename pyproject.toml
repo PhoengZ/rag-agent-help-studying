@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "antigravity-rag-cli"
+version = "0.1.0"
+description = "Antigravity Agentic RAG CLI using LlamaIndex, Typhoon, and ChromaDB"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "llama-index",
+    "chromadb",
+    "typer[all]",
+    "python-dotenv",
+    "llama-index-embeddings-huggingface",
+    "llama-index-llms-openai-like",
+    "pypdf",
+    "sentence-transformers"
+]
+
+[project.scripts]
+rag = "main:app"
+
+[tool.setuptools]
+py-modules = ["main", "query_engine", "sync_manager"]
+

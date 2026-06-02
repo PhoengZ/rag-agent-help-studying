@@ -1,0 +1,16 @@
+{
+  "directories": [
+    {
+      "name": "Finance",
+      "path": "./documents/Finance",
+      "collection_name": "finance_collection",
+      "description": "Used for finding information about finances, budgets, organization tax info, accounting, and annual budget plans for 2026."
+    },
+    {
+      "name": "HR",
+      "path": "./documents/HR",
+      "collection_name": "hr_collection",
+      "description": "Used for HR related questions, company welfare rules, employee manuals, health benefits, and leave submission guidelines."
+    }
+  ]
+}
