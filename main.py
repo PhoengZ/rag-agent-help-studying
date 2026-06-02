@@ -2,8 +2,10 @@ import os
 import typer
 from dotenv import load_dotenv
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Load dot env first before any other imports to populate environment variables
-load_dotenv()
+load_dotenv(dotenv_path=os.path.join(BASE_DIR, ".env"))
 
 app = typer.Typer(help="[Antigravity Agentic RAG CLI Tool]")
 

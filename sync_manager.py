@@ -6,11 +6,13 @@ from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex, 
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
+# Get the base directory where this file resides to resolve absolute paths
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MANIFEST_FILE = os.path.join(BASE_DIR, ".rag_manifest.json")
+
 # Initialize local embedding model globally to avoid reloading
 print("Loading local HuggingFace embedding model (BAAI/bge-m3)...")
 Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-m3")
-
-MANIFEST_FILE = ".rag_manifest.json"
 
 def calculate_sha256(file_path: str) -> str:
     """Calculates the SHA-256 hash of a file."""
@@ -56,17 +58,26 @@ def get_allowed_files(directory_path: str) -> list:
 
 def sync_all_documents():
     """Scans all configured directories and performs incremental updates to ChromaDB."""
+    config_path = os.path.join(BASE_DIR, "config.json")
     # Load configuration
-    if not os.path.exists("config.json"):
-        print("[Error] config.json not found!")
+    if not os.path.exists(config_path):
+        print(f"[Error] config.json not found at {config_path}!")
         return
 
-    with open("config.json", "r", encoding="utf-8") as f:
+    with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)
 
-    workspace_root = os.getcwd()
+    # Set workspace root to the absolute project base directory
+    workspace_root = BASE_DIR
+
+    # Load environment directories and anchor relative paths to the project base directory
     documents_root = os.getenv("DOCUMENTS_DIR", "./documents")
+    if not os.path.isabs(documents_root):
+        documents_root = os.path.abspath(os.path.join(BASE_DIR, documents_root))
+
     chroma_db_path = os.getenv("CHROMA_DB_PATH", "./storage/chroma_db")
+    if not os.path.isabs(chroma_db_path):
+        chroma_db_path = os.path.abspath(os.path.join(BASE_DIR, chroma_db_path))
 
     # Validate and ensure documents root exists
     if not os.path.exists(documents_root):
@@ -80,7 +91,11 @@ def sync_all_documents():
         raw_path = dir_info["path"]
         collection_name = dir_info["collection_name"]
 
-        # 1. Path Traversal Validation
+        # Resolve raw_path relative to BASE_DIR if it is relative
+        if not os.path.isabs(raw_path):
+            raw_path = os.path.abspath(os.path.join(BASE_DIR, raw_path))
+
+        # 1. Path Traversal Validation (verified against base workspace root)
         try:
             validated_path = validate_path(workspace_root, raw_path)
         except ValueError as err:
@@ -103,7 +118,7 @@ def sync_all_documents():
         disk_files = get_allowed_files(validated_path)
         disk_hashes = {}
         for file_path in disk_files:
-            # Keep relative paths for environment independence
+            # Keep relative paths relative to workspace_root for environment independence
             rel_path = os.path.relpath(file_path, workspace_root)
             disk_hashes[rel_path] = calculate_sha256(file_path)
 
@@ -136,8 +151,8 @@ def sync_all_documents():
                 else:
                     print(f"[Sync] Indexing new file: {rel_path}")
 
-                # Load and index the single file
-                full_path = os.path.join(workspace_root, rel_path)
+                # Load and index the single file using absolute path
+                full_path = os.path.abspath(os.path.join(workspace_root, rel_path))
                 try:
                     documents = SimpleDirectoryReader(input_files=[full_path]).load_data()
                     # Assign a deterministic doc_id so all chunks reference the file relative path
