@@ -70,5 +70,17 @@ def start():
         except Exception as e:
             typer.secho(f"[Error] Error compiling query response: {e}\n", fg=typer.colors.RED, err=True)
 
+@app.command()
+def remove(name: str = typer.Argument(..., help="The name of the collection to remove (e.g. HR, Finance)")):
+    """Remove a collection, its local document directory, and database contents completely."""
+    typer.secho(f"[Remove] Deleting collection and data for '{name}'...", fg=typer.colors.RED, bold=True)
+    import sync_manager
+    try:
+        sync_manager.remove_collection_data(name)
+    except Exception as e:
+        typer.secho(f"[Error] Error during removal: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+
 if __name__ == "__main__":
     app()
+

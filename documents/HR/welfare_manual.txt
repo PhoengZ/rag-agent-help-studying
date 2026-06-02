@@ -1,6 +1,0 @@
-Employee Welfare Manual:
-- Standard office working hours: 09:00 AM to 06:00 PM, Monday through Friday.
-- Annual paid leaves: 15 working days per calendar year.
-- Medical welfare: Up to $500 USD reimbursable annually for outpatient treatments.
-- Sick leave: Up to 30 days with full pay upon submitting a valid medical certificate.
-Leave requests must be submitted through the HR Portal at least 3 days in advance.
