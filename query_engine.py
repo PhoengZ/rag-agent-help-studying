@@ -8,7 +8,7 @@ from llama_index.core.selectors import LLMMultiSelector
 from llama_index.core.tools import QueryEngineTool
 from llama_index.llms.openai_like import OpenAILike
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.vector_stores.chromadb import ChromaVectorStore
+from llama_index.vector_stores.chroma import ChromaVectorStore
 
 # Load environment variables from .env file
 load_dotenv()
@@ -19,11 +19,14 @@ CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "./storage/chroma_db")
 
 print("Initializing Typhoon LLM...")
 Settings.llm = OpenAILike(
-    model="typhoon-v1.5x-70b-instruct",
+    model="typhoon-v2.5-30b-a3b-instruct",
     api_base="https://api.opentyphoon.ai/v1",
     api_key=TYPHOON_API_KEY,
+    is_chat_model=True,
     temperature=0.1
 )
+
+
 
 print("Loading local HuggingFace embedding model (BAAI/bge-m3)...")
 Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-m3")
@@ -65,10 +68,10 @@ def build_agentic_router_engine():
         try:
             chroma_collection = db_client.get_collection(collection_name)
             if chroma_collection.count() == 0:
-                print(f"⚠️ Warning: Collection '{collection_name}' is empty. Skipping from routing tools.")
+                print(f"[Warning] Collection '{collection_name}' is empty. Skipping from routing tools.")
                 continue
         except Exception:
-            print(f"⚠️ Warning: Collection '{collection_name}' not initialized. Skipping from routing tools.")
+            print(f"[Warning] Collection '{collection_name}' not initialized. Skipping from routing tools.")
             continue
 
         # Load Chroma Vector Store

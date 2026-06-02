@@ -3,7 +3,7 @@ import os
 import hashlib
 import chromadb
 from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex, StorageContext
-from llama_index.vector_stores.chromadb import ChromaVectorStore
+from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
 # Initialize local embedding model globally to avoid reloading
@@ -58,7 +58,7 @@ def sync_all_documents():
     """Scans all configured directories and performs incremental updates to ChromaDB."""
     # Load configuration
     if not os.path.exists("config.json"):
-        print("❌ config.json not found!")
+        print("[Error] config.json not found!")
         return
 
     with open("config.json", "r", encoding="utf-8") as f:
@@ -84,15 +84,15 @@ def sync_all_documents():
         try:
             validated_path = validate_path(workspace_root, raw_path)
         except ValueError as err:
-            print(f"⚠️ Security Skip: {err}")
+            print(f"[Warning] Security Skip: {err}")
             continue
 
         # Ensure directories exist
         if not os.path.exists(validated_path):
             os.makedirs(validated_path)
-            print(f"📁 Created empty directory: {validated_path}")
+            print(f"[Sync] Created empty directory: {validated_path}")
 
-        print(f"\n🔄 Syncing collection [{collection_name}] from {raw_path}...")
+        print(f"\n[Sync] Syncing collection [{collection_name}] from {raw_path}...")
 
         # Setup ChromaDB collection and store
         chroma_collection = db_client.get_or_create_collection(collection_name)
@@ -115,11 +115,11 @@ def sync_all_documents():
         # 4. Detect deleted files
         deleted_files = [f for f in collection_manifest if f not in disk_hashes]
         for rel_path in deleted_files:
-            print(f"🗑️ Deleting removed file from index: {rel_path}")
+            print(f"[Sync] Deleting removed file from index: {rel_path}")
             try:
                 vector_store.delete(rel_path)
             except Exception as e:
-                print(f"⚠️ Failed to delete {rel_path} from vector store: {e}")
+                print(f"[Warning] Failed to delete {rel_path} from vector store: {e}")
             del collection_manifest[rel_path]
 
         # 5. Detect new or modified files
@@ -128,13 +128,13 @@ def sync_all_documents():
             
             if prev_hash != current_hash:
                 if prev_hash is not None:
-                    print(f"✏️ Updating modified file in index: {rel_path}")
+                    print(f"[Sync] Updating modified file in index: {rel_path}")
                     try:
                         vector_store.delete(rel_path)
                     except Exception as e:
-                        print(f"⚠️ Failed to delete old version of {rel_path}: {e}")
+                        print(f"[Warning] Failed to delete old version of {rel_path}: {e}")
                 else:
-                    print(f"➕ Indexing new file: {rel_path}")
+                    print(f"[Sync] Indexing new file: {rel_path}")
 
                 # Load and index the single file
                 full_path = os.path.join(workspace_root, rel_path)
@@ -147,7 +147,7 @@ def sync_all_documents():
                     VectorStoreIndex.from_documents(documents, storage_context=storage_context)
                     collection_manifest[rel_path] = current_hash
                 except Exception as e:
-                    print(f"❌ Failed to parse/embed file {rel_path}: {e}")
+                    print(f"[Error] Failed to parse/embed file {rel_path}: {e}")
 
     save_manifest(manifest)
-    print("\n✅ Document synchronization completed successfully!")
+    print("\n[Sync] Document synchronization completed successfully!")
