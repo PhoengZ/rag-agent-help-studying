@@ -166,3 +166,70 @@ def sync_all_documents():
 
     save_manifest(manifest)
     print("\n[Sync] Document synchronization completed successfully!")
+
+
+def remove_collection_data(name: str):
+    """Removes a collection, deletes local folders/files, deletes ChromaDB collection, and cleans manifest/config.json."""
+    config_path = os.path.join(BASE_DIR, "config.json")
+    if not os.path.exists(config_path):
+        print(f"[Error] config.json not found at {config_path}!")
+        return
+
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = json.load(f)
+
+    matched_dir = None
+    new_directories = []
+    for d in config.get("directories", []):
+        if d["name"].lower() == name.lower():
+            matched_dir = d
+        else:
+            new_directories.append(d)
+
+    if not matched_dir:
+        print(f"[Error] Collection name '{name}' not found in config.json.")
+        return
+
+    # 1. Delete physical folder and files
+    raw_path = matched_dir["path"]
+    if not os.path.isabs(raw_path):
+        raw_path = os.path.abspath(os.path.join(BASE_DIR, raw_path))
+    
+    if os.path.exists(raw_path):
+        import shutil
+        try:
+            shutil.rmtree(raw_path)
+            print(f"[Remove] Deleted physical directory: {raw_path}")
+        except Exception as e:
+            print(f"[Error] Failed to delete directory {raw_path}: {e}")
+    else:
+        print(f"[Remove] Mapped directory does not exist, skipping file deletion: {raw_path}")
+
+    # 2. Delete from ChromaDB
+    chroma_db_path = os.getenv("CHROMA_DB_PATH", "./storage/chroma_db")
+    if not os.path.isabs(chroma_db_path):
+        chroma_db_path = os.path.abspath(os.path.join(BASE_DIR, chroma_db_path))
+
+    collection_name = matched_dir["collection_name"]
+    try:
+        db_client = chromadb.PersistentClient(path=chroma_db_path)
+        db_client.delete_collection(collection_name)
+        print(f"[Remove] Deleted ChromaDB collection: {collection_name}")
+    except Exception as e:
+        print(f"[Warning] Failed to delete collection '{collection_name}' from ChromaDB (might not exist): {e}")
+
+    # 3. Remove from manifest
+    manifest = load_manifest()
+    if collection_name in manifest:
+        del manifest[collection_name]
+        save_manifest(manifest)
+        print(f"[Remove] Removed '{collection_name}' from manifest.")
+
+    # 4. Save updated config.json
+    config["directories"] = new_directories
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+    print(f"[Remove] Removed '{name}' entry from config.json.")
+
+    print(f"\n[Remove] Successfully removed collection '{name}' completely!")
+
