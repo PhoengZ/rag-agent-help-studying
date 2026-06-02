@@ -25,11 +25,15 @@ By feeding internal resources (e.g., guidelines, developer handbooks, and compan
 * **File:** [sync_manager.py](file:///C:/Users/USER/Desktop/VScode/rag-agent/sync_manager.py)
 * **Purpose:** Handles the RAG database ingestion pipeline. It scans document folders, tracks changes/deletions incrementally using file hash comparisons (`.rag_manifest.json`), parses documents (PDF, TXT, MD), and encodes text chunks into vector embeddings via local models.
 
-### 3. Query Router Engine
+### 3. Visual PDF OCR Reader
+* **File:** [ocr_reader.py](file:///C:/Users/USER/Desktop/VScode/rag-agent/ocr_reader.py)
+* **Purpose:** Implement the custom [TyphoonOCRReader](file:///C:/Users/USER/Desktop/VScode/rag-agent/ocr_reader.py#L9) class extending LlamaIndex's `BaseReader`. It opens PDF slides, renders each page into PNG bytes in-memory (via PyMuPDF), base64-encodes them, and calls OpenTyphoon's `typhoon-ocr` Vision-Language Model in parallel threads to extract visual text cleanly.
+
+### 4. Query Router Engine
 * **File:** [query_engine.py](file:///C:/Users/USER/Desktop/VScode/rag-agent/query_engine.py)
 * **Purpose:** Sets up the agentic routing query engine. It connects to ChromaDB, initializes OpenTyphoon LLM, and builds a `RouterQueryEngine` with `LLMMultiSelector` to automatically route incoming questions to the most relevant document collections.
 
-### 4. Dynamic Mapping Configuration
+### 5. Dynamic Mapping Configuration
 * **File:** [config.json](file:///C:/Users/USER/Desktop/VScode/rag-agent/config.json)
 * **Purpose:** Configures collection directories, database collection names, and semantic descriptions. The router LLM uses these descriptions to dynamically select which document store(s) to query.
 
@@ -37,7 +41,7 @@ By feeding internal resources (e.g., guidelines, developer handbooks, and compan
 
 ## 🏗️ System Architecture
 
-The following flow represents the indexing (sync) pipeline and the query routing (start) pipeline:
+The following flow represents the indexing (sync) pipeline with parallel OCR extraction and the query routing (start) pipeline:
 
 ```mermaid
 graph TD
@@ -48,10 +52,12 @@ graph TD
     classDef external fill:#7c2d12,stroke:#f97316,stroke-width:2px,color:#fff;
 
     subgraph "Ingestion (Sync) Pipeline"
-        Docs[("Local Documents\n(documents/*)")] -->|Reads Files| Reader["SimpleDirectoryReader"]
-        Reader -->|Splits Text| Splitter["SentenceSplitter\n(1024 Token Chunks)"]
-        Splitter -->|Computes Hashes| HashCheck["Manifest Compare\n(.rag_manifest.json)"]
-        HashCheck -->|New/Modified| EmbedModel["HuggingFaceEmbedding\n(multilingual-e5-small)"]
+        Docs[("Local Documents\n(documents/*)")] --> HashCheck["Manifest Compare\n(.rag_manifest.json)"]
+        HashCheck -->|New/Modified PDF| OCR["TyphoonOCRReader\n(pymupdf + typhoon-ocr API)"]
+        HashCheck -->|New/Modified TXT/MD| TextReader["SimpleDirectoryReader\n(Direct Text Extract)"]
+        OCR -->|Extracted Markdown| Splitter["SentenceSplitter\n(1024 Token Chunks)"]
+        TextReader -->|Direct Text| Splitter
+        Splitter -->|Generates Nodes| EmbedModel["HuggingFaceEmbedding\n(multilingual-e5-small)"]
         EmbedModel -->|GPU/CUDA Inference| VectorStore["ChromaVectorStore"]
         VectorStore -->|Writes Embeddings| ChromaDB[("Local ChromaDB\n(storage/chroma_db)")]
     end
@@ -66,7 +72,7 @@ graph TD
 
     %% Apply styles
     class User client;
-    class Reader,Splitter,HashCheck,Router logic;
+    class TextReader,OCR,Splitter,HashCheck,Router logic;
     class Docs,ChromaDB,VectorStore db;
     class EmbedModel,LLM external;
 ```
@@ -135,7 +141,7 @@ The application requires the following environment variables. Set them in a `.en
 # ==========================================
 # OpenTyphoon LLM Configurations
 # ==========================================
-# [Required] Your personal OpenTyphoon API token (compatible with OpenAI Like Client)
+# [Required] Your personal OpenTyphoon API token (compatible with OpenAI Like Client and OCR)
 TYPHOON_API_KEY=sk-your-typhoon-api-key
 
 # ==========================================
