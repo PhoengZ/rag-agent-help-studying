@@ -18,7 +18,8 @@ dependencies = [
     "llama-index-embeddings-huggingface",
     "llama-index-llms-openai-like",
     "pypdf",
-    "sentence-transformers"
+    "sentence-transformers",
+    "pymupdf"
 
 ]
 
@@ -26,5 +27,5 @@ dependencies = [
 rag = "main:app"
 
 [tool.setuptools]
-py-modules = ["main", "query_engine", "sync_manager"]
+py-modules = ["main", "query_engine", "sync_manager", "ocr_reader"]
 

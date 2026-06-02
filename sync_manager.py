@@ -2,6 +2,7 @@ import json
 import os
 import hashlib
 import chromadb
+from dotenv import load_dotenv
 from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex, StorageContext
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
@@ -9,6 +10,13 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 # Get the base directory where this file resides to resolve absolute paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MANIFEST_FILE = os.path.join(BASE_DIR, ".rag_manifest.json")
+
+import sys
+if BASE_DIR not in sys.path:
+    sys.path.append(BASE_DIR)
+
+# Load environment variables from .env
+load_dotenv(dotenv_path=os.path.join(BASE_DIR, ".env"))
 
 import torch
 
@@ -163,7 +171,15 @@ def sync_all_documents():
                 # Load and index the single file using absolute path
                 full_path = os.path.abspath(os.path.join(workspace_root, rel_path))
                 try:
-                    documents = SimpleDirectoryReader(input_files=[full_path]).load_data()
+                    file_extractor = None
+                    if full_path.lower().endswith(".pdf"):
+                        from ocr_reader import TyphoonOCRReader
+                        file_extractor = {".pdf": TyphoonOCRReader()}
+                    
+                    documents = SimpleDirectoryReader(
+                        input_files=[full_path],
+                        file_extractor=file_extractor
+                    ).load_data()
                     # Assign a deterministic doc_id so all chunks reference the file relative path
                     for doc in documents:
                         doc.doc_id = rel_path
