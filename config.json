@@ -1,10 +1,10 @@
 {
   "directories": [
     {
-      "name": "Finance",
-      "path": "./documents/Finance",
-      "collection_name": "finance_collection",
-      "description": "Used for finding information about finances, budgets, organization tax info, accounting, and annual budget plans for 2026."
+      "name": "DSDE",
+      "path": "./documents/DSDE",
+      "collection_name": "dsde_collection",
+      "description": "Used for finding information about Data Science and Data Engineering (DSDE) lecture slides, Conda and VS Code handbooks, and student grader instructions."
     }
   ]
 }

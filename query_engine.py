@@ -31,8 +31,18 @@ Settings.llm = OpenAILike(
     temperature=0.1
 )
 
-print("Loading local HuggingFace embedding model (BAAI/bge-m3)...")
-Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-m3")
+import torch
+
+# Initialize local embedding model globally to avoid reloading
+device = "cuda" if torch.cuda.is_available() else "cpu"
+print(f"Loading local HuggingFace embedding model (intfloat/multilingual-e5-small) on {device}...")
+Settings.embed_model = HuggingFaceEmbedding(
+    model_name="intfloat/multilingual-e5-small",
+    device=device,
+    embed_batch_size=64,
+    query_instruction="query: ",
+    text_instruction="passage: "
+)
 
 def validate_path(base_dir: str, target_path: str) -> str:
     """Ensures paths remain inside the base directory."""

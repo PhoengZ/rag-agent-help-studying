@@ -15,3 +15,22 @@
 - **Hypothesis**: The model name `typhoon-v1.5x-70b-instruct` was deprecated, and the completions endpoint `/v1/completions` was not supported by OpenTyphoon.
 - **Observed Result/Outcome**: Verified that OpenTyphoon only supports `/v1/chat/completions`. Updated the model to `typhoon-v2.5-30b-a3b-instruct` and added the parameter `is_chat_model=True` to the `OpenAILike` initialization to route completions correctly. System verified functional.
 
+## [2026-06-02] - Debugging PDF Embedding Slowness
+- **Attempted**: Diagnosed slow embedding of PDF files (e.g. `1_DataScienceOverview.pdf`) and verified GPU CUDA availability.
+- **Hypothesis**:
+  1. The installed `torch` library was CPU-only (`2.12.0+cpu`), preventing GPU acceleration.
+  2. The default model `BAAI/bge-m3` is too large (567M params) and slow on CPU.
+  3. The PDF is parsed into a single large string chunk with 6.8 million characters, resulting in 8327 text nodes, causing a massive bottleneck when embedding chunk-by-chunk.
+- **Observed Result/Outcome**:
+  1. Verified user has an NVIDIA GeForce RTX 3050 Laptop GPU. Force-reinstalled `torch` with CUDA 12.4 support (`2.6.0+cu124`).
+  2. Created scratch benchmark scripts to isolate performance:
+     - PDF parsing takes ~0.29 seconds.
+     - PDF yields 8327 nodes.
+     - On CUDA GPU, `BAAI/bge-m3` processes 5.05 chunks/sec (~27.5 minutes for full doc).
+     - On CUDA GPU, `intfloat/multilingual-e5-small` processes ~70 chunks/sec (~2.0 minutes for full doc).
+  3. Decided to switch embedding model to `intfloat/multilingual-e5-small` and enable CUDA device loading with batch size of 64.
+
+## [2026-06-02] - Update Gitignore
+- **Attempted**: Updated `.gitignore` to prevent tracking of local document files.
+- **Hypothesis**: Adding `documents/` to `.gitignore` will ignore local files/folders under the documents directory.
+- **Observed Result/Outcome**: Appended `documents/` to `.gitignore`. Ran `git status` and verified that untracked directories like `documents/DSDE/` and `documents/IOT/` are now successfully ignored by Git.

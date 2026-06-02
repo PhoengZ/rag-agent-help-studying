@@ -10,9 +10,18 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MANIFEST_FILE = os.path.join(BASE_DIR, ".rag_manifest.json")
 
+import torch
+
 # Initialize local embedding model globally to avoid reloading
-print("Loading local HuggingFace embedding model (BAAI/bge-m3)...")
-Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-m3")
+device = "cuda" if torch.cuda.is_available() else "cpu"
+print(f"Loading local HuggingFace embedding model (intfloat/multilingual-e5-small) on {device}...")
+Settings.embed_model = HuggingFaceEmbedding(
+    model_name="intfloat/multilingual-e5-small",
+    device=device,
+    embed_batch_size=64,
+    query_instruction="query: ",
+    text_instruction="passage: "
+)
 
 def calculate_sha256(file_path: str) -> str:
     """Calculates the SHA-256 hash of a file."""
