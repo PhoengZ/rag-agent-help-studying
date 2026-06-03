@@ -5,6 +5,11 @@
       "path": "./documents/DSDE",
       "collection_name": "dsde_collection",
       "description": "Used for finding information about Data Science and Data Engineering (DSDE) lecture slides, Conda and VS Code handbooks, and student grader instructions."
+    },{
+      "name": "Intern-Guide",
+      "path":"./documents/Intern-Guide",
+      "collection_name":"intern-guide_collection",
+      "description":"Used for finding informatioln about guidliness of internship, internship calender"
     }
   ]
 }
