@@ -17,7 +17,7 @@ By feeding internal resources (e.g., guidelines, developer handbooks, and compan
 ### 1. Command-Line Entry Point
 * **File:** [main.py](file:///C:/Users/USER/Desktop/VScode/rag-agent/main.py)
 * **Purpose:** Built using Typer, it acts as the user CLI interface. It supports three major commands:
-  - `sync`: Triggers document scanning and incremental vector database updates.
+  - `sync`: Triggers document scanning and incremental vector database updates. Supports a `--mode` option (e.g. `--mode local` or `--mode typhoon`) to choose the extraction method.
   - `start`: Starts an interactive QA prompt session with the RAG agent router.
   - `remove [name]`: Deletes a mapped collection, its local document folder, and database entries.
 
@@ -25,9 +25,11 @@ By feeding internal resources (e.g., guidelines, developer handbooks, and compan
 * **File:** [sync_manager.py](file:///C:/Users/USER/Desktop/VScode/rag-agent/sync_manager.py)
 * **Purpose:** Handles the RAG database ingestion pipeline. It scans document folders, tracks changes/deletions incrementally using file hash comparisons (`.rag_manifest.json`), parses documents (PDF, TXT, MD), and encodes text chunks into vector embeddings via local models.
 
-### 3. Visual PDF OCR Reader
+### 3. Dynamic PDF Extraction Interface
 * **File:** [ocr_reader.py](file:///C:/Users/USER/Desktop/VScode/rag-agent/ocr_reader.py)
-* **Purpose:** Implement the custom [TyphoonOCRReader](file:///C:/Users/USER/Desktop/VScode/rag-agent/ocr_reader.py#L9) class extending LlamaIndex's `BaseReader`. It opens PDF slides, renders each page into PNG bytes in-memory (via PyMuPDF), base64-encodes them, and calls OpenTyphoon's `typhoon-ocr` Vision-Language Model in parallel threads to extract visual text cleanly.
+* **Purpose:** Implements the `HybridPDFReader` facade which dynamically routes PDF processing based on configuration:
+  - **Local Mode (`LocalPDFReader`)**: Extracts embedded text layers instantly via PyMuPDF. If the page is scanned (has no text layer), it falls back to a local deep-learning OCR (`easyocr`) if installed. This ensures complete privacy and zero data leakage.
+  - **Typhoon OCR Mode (`TyphoonOCRReader`)**: Submits rendered page images concurrently to OpenTyphoon's VLM-based `typhoon-ocr` API. Features a thread-safe rate-limiting lock that enforces a 3-second cooldown interval between request starts to comply with API limits (20 req/min, 2 req/s).
 
 ### 4. Query Router Engine
 * **File:** [query_engine.py](file:///C:/Users/USER/Desktop/VScode/rag-agent/query_engine.py)
@@ -41,7 +43,7 @@ By feeding internal resources (e.g., guidelines, developer handbooks, and compan
 
 ## 🏗️ System Architecture
 
-The following flow represents the indexing (sync) pipeline with parallel OCR extraction and the query routing (start) pipeline:
+The following flow represents the indexing (sync) pipeline supporting hybrid PDF extraction, and the query routing (start) pipeline:
 
 ```mermaid
 graph TD
@@ -53,10 +55,20 @@ graph TD
 
     subgraph "Ingestion (Sync) Pipeline"
         Docs[("Local Documents\n(documents/*)")] --> HashCheck["Manifest Compare\n(.rag_manifest.json)"]
-        HashCheck -->|New/Modified PDF| OCR["TyphoonOCRReader\n(pymupdf + typhoon-ocr API)"]
+        HashCheck -->|New/Modified PDF| Hybrid["HybridPDFReader\n(Routes based on Mode)"]
         HashCheck -->|New/Modified TXT/MD| TextReader["SimpleDirectoryReader\n(Direct Text Extract)"]
-        OCR -->|Extracted Markdown| Splitter["SentenceSplitter\n(1024 Token Chunks)"]
+        
+        Hybrid -->|local mode| LocalReader["LocalPDFReader\n(PyMuPDF Direct Text)"]
+        LocalReader -->|Scanned Fallback| EasyOCR["EasyOCR\n(Local Thai/Eng OCR)"]
+        Hybrid -->|typhoon mode| OCR["TyphoonOCRReader\n(Thread-Safe 3s Rate Limited)"]
+        
+        OCR -->|API Request| TyphoonAPI["Typhoon OCR API\n(Cloud VLM)"]
+        TyphoonAPI -->|Markdown Text| Splitter["SentenceSplitter\n(1024 Token Chunks)"]
+        
+        EasyOCR -->|Extracted Text| Splitter
+        LocalReader -->|Direct Text| Splitter
         TextReader -->|Direct Text| Splitter
+        
         Splitter -->|Generates Nodes| EmbedModel["HuggingFaceEmbedding\n(multilingual-e5-small)"]
         EmbedModel -->|GPU/CUDA Inference| VectorStore["ChromaVectorStore"]
         VectorStore -->|Writes Embeddings| ChromaDB[("Local ChromaDB\n(storage/chroma_db)")]
@@ -72,9 +84,9 @@ graph TD
 
     %% Apply styles
     class User client;
-    class TextReader,OCR,Splitter,HashCheck,Router logic;
+    class TextReader,Hybrid,LocalReader,EasyOCR,OCR,Splitter,HashCheck,Router logic;
     class Docs,ChromaDB,VectorStore db;
-    class EmbedModel,LLM external;
+    class EmbedModel,LLM,TyphoonAPI external;
 ```
 
 ---
@@ -84,7 +96,7 @@ graph TD
 ### Prerequisites
 - Python >= 3.9 (Python 3.12 recommended)
 - An active **OpenTyphoon API Key**
-- NVIDIA Graphics Card with WDDM drivers (Optional, recommended for GPU acceleration)
+- NVIDIA Graphics Card with CUDA support (Optional, recommended for GPU acceleration)
 
 ### Installation Steps
 
@@ -106,24 +118,34 @@ graph TD
    pip install -e .
    ```
 
-4. **Install GPU-Accelerated PyTorch (Optional but highly recommended):**
-   To utilize your GPU and accelerate the PDF indexing process (by 10x-50x), install the CUDA 12.4 version of PyTorch:
-   ```powershell
-   pip install torch --index-url https://download.pytorch.org/whl/cu124 --force-reinstall
-   ```
+4. **Install GPU-Accelerated PyTorch & Optional Local OCR Support:**
+   - To utilize your GPU and accelerate the PDF indexing process (by 10x-50x), install the CUDA 12.4 version of PyTorch:
+     ```powershell
+     pip install torch --index-url https://download.pytorch.org/whl/cu124 --force-reinstall
+     ```
+   - (Optional) Install `easyocr` to support local fallback OCR for scanned PDFs:
+     ```powershell
+     pip install easyocr
+     ```
 
 5. **Configure Environment Variables:**
-   Create a `.env` file in the root directory and specify your OpenTyphoon credentials:
+   Create a `.env` file in the root directory and specify your credentials and mode choice:
    ```env
    TYPHOON_API_KEY=your_typhoon_api_key_here
    CHROMA_DB_PATH=./storage/chroma_db
    DOCUMENTS_DIR=./documents
+   PDF_EXTRACT_MODE=local
    ```
 
 6. **Initialize / Index Documents:**
    Place your PDFs/documents inside the mapped directories (configured in `config.json` e.g., `./documents/DSDE`), then run:
    ```powershell
+   # Syncs using the default mode in .env (local)
    python main.py sync
+   
+   # Or explicitly choose the mode via CLI options:
+   python main.py sync --mode typhoon
+   python main.py sync --mode local
    ```
 
 7. **Start Chatting:**
@@ -152,4 +174,11 @@ CHROMA_DB_PATH=./storage/chroma_db
 
 # [Optional] Root directory where your source folders exist
 DOCUMENTS_DIR=./documents
+
+# ==========================================
+# Ingestion Configurations
+# ==========================================
+# [Optional] PDF text extraction mode: local or typhoon (default: local)
+# Set to 'local' for complete privacy and data-leak prevention.
+PDF_EXTRACT_MODE=local
 ```
