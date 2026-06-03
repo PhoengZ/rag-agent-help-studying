@@ -40,3 +40,8 @@
 - **Hypothesis**: In-memory rendering combined with concurrent API calls will efficiently extract text from lecture slides and image-only PDFs, which can then be successfully embedded by `multilingual-e5-small`.
 - **Observed Result/Outcome**: Installed `pymupdf` dependency. Verified with a test script on `3_Grader Handbook.pdf` that page-by-page OCR works correctly. Executed incremental synchronization (`main.py sync`) which successfully updated the vector store index using the new OCR pipeline.
 
+
+## [2026-06-03] - Hybrid PDF Text Extraction & User Choice Mode
+- **Attempted**: Designed and implemented a hybrid PDF text extraction strategy in `ocr_reader.py`, `sync_manager.py`, and `main.py` allowing users to choose between `local` extraction (first trying direct PyMuPDF text layer parsing, with local EasyOCR fallback) and `typhoon` (cloud-based Typhoon OCR).
+- **Hypothesis**: Giving users choice via `--mode` CLI flag and `PDF_EXTRACT_MODE` environment variable allows privacy-first operation (preventing data leakage) while maintaining high-fidelity cloud-based OCR when requested.
+- **Observed Result/Outcome**: Refactored `ocr_reader.py` to create `LocalPDFReader` and `HybridPDFReader` wrapper, updated `sync_manager.py` and `main.py` to support passing `--mode` options. Created a verification script (`scratch/test_hybrid_reader.py`) and verified that it successfully runs direct text extraction on digital pages, falls back gracefully to print a warning when `easyocr` is missing for scanned pages, and routes calls dynamically based on CLI/environment flags.
