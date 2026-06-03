@@ -1,6 +1,8 @@
 import os
 import base64
 import concurrent.futures
+import threading
+import time
 from openai import OpenAI
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
@@ -20,6 +22,11 @@ class TyphoonOCRReader(BaseReader):
             raise ValueError("TYPHOON_API_KEY is not set or is using a placeholder. Please set it in your environment or .env file.")
             
         self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+        
+        # Thread-safe rate limiter variables for Typhoon OCR API (20 req/min -> 3.0s min interval)
+        self._rate_limit_lock = threading.Lock()
+        self._last_request_time = 0.0
+        self._min_interval = 3.0
 
     def _ocr_page(self, page_idx: int, png_bytes: bytes, file_name: str) -> tuple[int, str]:
         """Submits a single page image to the typhoon-ocr API."""
@@ -28,6 +35,15 @@ class TyphoonOCRReader(BaseReader):
         # Simple retry logic for transient API issues (e.g. rate limits or server errors)
         max_retries = 3
         for attempt in range(max_retries):
+            # Enforce thread-safe rate-limiting cooldown of 3 seconds between starts of requests
+            with self._rate_limit_lock:
+                now = time.time()
+                elapsed = now - self._last_request_time
+                if elapsed < self._min_interval:
+                    sleep_time = self._min_interval - elapsed
+                    time.sleep(sleep_time)
+                self._last_request_time = time.time()
+
             try:
                 response = self.client.chat.completions.create(
                     model="typhoon-ocr",
@@ -54,7 +70,6 @@ class TyphoonOCRReader(BaseReader):
                 if attempt == max_retries - 1:
                     # On final failure, return empty text but don't crash the pipeline
                     return page_idx, f"[OCR Error: Failed to extract text for page {page_idx + 1}]"
-                import time
                 time.sleep(2 ** attempt) # Exponential backoff
 
     def load_data(self, file_path: str, extra_info: dict = None) -> list[Document]:
