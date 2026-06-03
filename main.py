@@ -9,13 +9,22 @@ load_dotenv(dotenv_path=os.path.join(BASE_DIR, ".env"))
 
 app = typer.Typer(help="[Antigravity Agentic RAG CLI Tool]")
 
+from typing import Optional
+
 @app.command()
-def sync():
+def sync(
+    mode: Optional[str] = typer.Option(
+        None,
+        "--mode",
+        "-m",
+        help="PDF text extraction mode. 'local' (privacy-first/local EasyOCR) or 'typhoon' (cloud Typhoon OCR). Overrides PDF_EXTRACT_MODE."
+    )
+):
     """Sync and update PDF/text/markdown documents incrementally to local ChromaDB."""
-    typer.secho("[Sync] Scanning and updating documents...", fg=typer.colors.CYAN, bold=True)
+    typer.secho(f"[Sync] Scanning and updating documents (mode={mode or 'default'})...", fg=typer.colors.CYAN, bold=True)
     import sync_manager
     try:
-        sync_manager.sync_all_documents()
+        sync_manager.sync_all_documents(mode=mode)
     except Exception as e:
         typer.secho(f"[Error] Error during sync: {e}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1)

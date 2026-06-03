@@ -73,7 +73,7 @@ def get_allowed_files(directory_path: str) -> list:
                 found_files.append(os.path.join(root, file))
     return found_files
 
-def sync_all_documents():
+def sync_all_documents(mode: str = None):
     """Scans all configured directories and performs incremental updates to ChromaDB."""
     config_path = os.path.join(BASE_DIR, "config.json")
     # Load configuration
@@ -173,8 +173,8 @@ def sync_all_documents():
                 try:
                     file_extractor = None
                     if full_path.lower().endswith(".pdf"):
-                        from ocr_reader import TyphoonOCRReader
-                        file_extractor = {".pdf": TyphoonOCRReader()}
+                        from ocr_reader import HybridPDFReader
+                        file_extractor = {".pdf": HybridPDFReader(mode=mode)}
                     
                     documents = SimpleDirectoryReader(
                         input_files=[full_path],

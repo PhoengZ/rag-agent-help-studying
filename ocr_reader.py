@@ -100,7 +100,8 @@ class TyphoonOCRReader(BaseReader):
             metadata = {
                 "file_path": file_path,
                 "file_name": file_name,
-                "page_num": i + 1
+                "page_num": i + 1,
+                "extraction_method": "typhoon_ocr"
             }
             if extra_info:
                 metadata.update(extra_info)
@@ -109,3 +110,113 @@ class TyphoonOCRReader(BaseReader):
 
         print(f"[OCR] Visual extraction completed for: {file_name}")
         return documents
+
+
+class LocalPDFReader(BaseReader):
+    """Custom LlamaIndex reader that extracts text locally.
+    It first attempts direct text extraction via PyMuPDF.
+    If the page is scanned (no text layer), it falls back to EasyOCR (if installed).
+    """
+    def __init__(self):
+        super().__init__()
+        self._easyocr_reader = None
+
+    def _get_easyocr_reader(self):
+        if self._easyocr_reader is None:
+            try:
+                import easyocr
+                # Initialize reader for Thai and English
+                print("[OCR] Loading local EasyOCR model (Thai + English)...")
+                # EasyOCR downloads the model on the first load if not present
+                self._easyocr_reader = easyocr.Reader(['th', 'en'])
+            except ImportError:
+                print("[Warning] 'easyocr' library not found. Local OCR fallback is disabled.")
+                print("To enable local OCR for scanned PDFs, please run: pip install easyocr")
+                self._easyocr_reader = False
+        return self._easyocr_reader
+
+    def load_data(self, file_path: str, extra_info: dict = None) -> list[Document]:
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"File not found: {file_path}")
+
+        file_name = os.path.basename(file_path)
+        print(f"[Local Extract] Opening PDF for local extraction: {file_name}...")
+        
+        doc = pymupdf.open(file_path)
+        total_pages = len(doc)
+        
+        documents = []
+        for i in range(total_pages):
+            page = doc[i]
+            # 1. Attempt direct text extraction
+            text = page.get_text()
+            
+            method = "direct"
+            # 2. Check if the page is empty/scanned
+            if not text.strip():
+                print(f"[Local Extract] Page {i + 1} has no text layer. Attempting local OCR...")
+                # Render page to PNG bytes
+                pix = page.get_pixmap(dpi=150)
+                png_bytes = pix.tobytes("png")
+                
+                reader = self._get_easyocr_reader()
+                if reader:
+                    try:
+                        results = reader.readtext(png_bytes, detail=0)
+                        text = "\n".join(results)
+                        method = "local_ocr"
+                        print(f"[Local OCR] Successfully OCR-ed page {i + 1}")
+                    except Exception as e:
+                        print(f"[Error] Failed running EasyOCR on page {i + 1}: {e}")
+                        text = f"[OCR Error: Failed to perform local OCR on page {i + 1}]"
+                        method = "error"
+                else:
+                    text = f"[OCR Warning: easyocr is required to extract text from scanned page {i + 1}]"
+                    method = "warning"
+            else:
+                print(f"[Local Extract] Successfully extracted text directly from page {i + 1}")
+
+            metadata = {
+                "file_path": file_path,
+                "file_name": file_name,
+                "page_num": i + 1,
+                "extraction_method": method
+            }
+            if extra_info:
+                metadata.update(extra_info)
+
+            documents.append(Document(text=text, metadata=metadata))
+            
+        doc.close()
+        print(f"[Local Extract] Extraction completed for: {file_name}")
+        return documents
+
+
+class HybridPDFReader(BaseReader):
+    """Custom LlamaIndex reader that delegates to either LocalPDFReader or TyphoonOCRReader
+    depending on the configured mode.
+    """
+    def __init__(self, mode: str = None, api_key: str = None, base_url: str = "https://api.opentyphoon.ai/v1", max_workers: int = 4):
+        super().__init__()
+        # Check environment variable first, then fallback to argument, default to 'local'
+        env_mode = os.getenv("PDF_EXTRACT_MODE")
+        self.mode = mode or env_mode or "local"
+        self.mode = self.mode.lower().strip()
+        
+        if self.mode not in ["local", "typhoon"]:
+            print(f"[Warning] Invalid extraction mode '{self.mode}'. Defaulting to 'local'.")
+            self.mode = "local"
+            
+        self.api_key = api_key
+        self.base_url = base_url
+        self.max_workers = max_workers
+        
+    def load_data(self, file_path: str, extra_info: dict = None) -> list[Document]:
+        print(f"[Hybrid Extract] Processing file using mode: {self.mode}")
+        if self.mode == "typhoon":
+            # Initialize TyphoonOCRReader dynamically only when needed to prevent premature key validation errors
+            reader = TyphoonOCRReader(api_key=self.api_key, base_url=self.base_url, max_workers=self.max_workers)
+            return reader.load_data(file_path, extra_info)
+        else:
+            reader = LocalPDFReader()
+            return reader.load_data(file_path, extra_info)
